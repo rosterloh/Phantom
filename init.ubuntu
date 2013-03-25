@@ -1,0 +1,116 @@
+#!/bin/sh
+#
+### BEGIN INIT INFO
+# Provides:          phantom
+# Required-Start:    $local_fs $network $remote_fs
+# Required-Stop:     $local_fs $network $remote_fs
+# Should-Start:      $NetworkManager
+# Should-Stop:       $NetworkManager
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: starts instance of Phantom
+# Description:       starts instance of Phantom using start-stop-daemon
+### END INIT INFO
+
+# Source Phantom configuration
+if [ -f /etc/default/phantom ]; then
+    . /etc/default/phantom
+else
+    echo "/etc/default/phantom not found using default settings.";
+fi
+
+# Script name
+NAME=phantom
+
+# App name
+DESC=Phantom
+
+## Don't edit this file
+## Edit user configuation in /etc/default/phantom to change
+##
+## APP_USER=        #$RUN_AS, username to run phantom under, the default is phantom
+## APP_HOME=        #$APP_PATH, the location of Phantom.py, the default is /opt/Phantom
+## APP_DATA=        #$DATA_DIR, the location of phantom.db, cache, logs, the default is /opt/Phantom
+## APP_PIDFILE=     #$PID_FILE, the location of phantom.pid, the default is /var/run/phantom/phantom.pid
+## PYTHON_BIN=      #$DAEMON, the location of the python binary, the default is /usr/bin/python
+## APP_OPTS=        #$EXTRA_DAEMON_OPTS, extra cli option for phantom, i.e. " --config=/home/phantom/config.ini"
+## SSD_OPTS=        #$EXTRA_SSD_OPTS, extra start-stop-daemon option like " --group=users"
+##
+## EXAMPLE if want to run as different user
+## add APP_USER=username to /etc/default/phantom
+## otherwise default phantom is used
+
+## The defaults
+# Run as username 
+RUN_AS=${SB_USER-phantom}
+
+# Path to app APP_HOME=path_to_app_Phantom.py
+APP_PATH=${APP_HOME-/opt/Phantom}
+
+# Data directory where phantom.db, cache and logs are stored
+DATA_DIR=${APP_DATA-/opt/phantom}
+
+# Path to store PID file
+PID_FILE=${APP_PIDFILE-/var/run/phantom/phantom.pid}
+
+# path to python bin
+DAEMON=${PYTHON_BIN-/usr/bin/python}
+
+# Extra daemon option like: APP_OPTS=" --config=/home/phantom/config.ini"
+EXTRA_DAEMON_OPTS=${APP_OPTS-}
+
+# Extra start-stop-daemon option like START_OPTS=" --group=users"
+EXTRA_SSD_OPTS=${SSD_OPTS-}
+##
+
+PID_PATH=`dirname $PID_FILE`
+DAEMON_OPTS=" Phantom.py -q --daemon --nolaunch --pidfile=${PID_FILE} --datadir=${DATA_DIR} ${EXTRA_DAEMON_OPTS}"
+
+##
+
+test -x $DAEMON || exit 0
+
+set -e
+
+# Create PID directory if not exist and ensure the phantom user can write to it
+if [ ! -d $PID_PATH ]; then
+    mkdir -p $PID_PATH
+    chown $RUN_AS $PID_PATH
+fi
+
+if [ ! -d $DATA_DIR ]; then
+    mkdir -p $DATA_DIR
+    chown $RUN_AS $DATA_DIR
+fi
+
+if [ -e $PID_FILE ]; then
+    PID=`cat $PID_FILE`
+    if ! kill -0 $PID > /dev/null 2>&1; then
+        echo "Removing stale $PID_FILE"
+        rm $PID_FILE
+    fi
+fi
+
+case "$1" in
+    start)
+        echo "Starting $DESC"
+        start-stop-daemon -d $APP_PATH -c $RUN_AS $EXTRA_SSD_OPTS --start --pidfile $PID_FILE --exec $DAEMON -- $DAEMON_OPTS
+        ;;
+    stop)
+        echo "Stopping $DESC"
+        start-stop-daemon --stop --pidfile $PID_FILE --retry 15
+        ;;
+
+    restart|force-reload)
+        echo "Restarting $DESC"
+        start-stop-daemon --stop --pidfile $PID_FILE --retry 15
+        start-stop-daemon -d $APP_PATH -c $RUN_AS $EXTRA_SSD_OPTS --start --pidfile $PID_FILE --exec $DAEMON -- $DAEMON_OPTS
+        ;;
+    *)
+        N=/etc/init.d/$NAME
+        echo "Usage: $N {start|stop|restart|force-reload}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
