@@ -22,7 +22,6 @@ except:
 if sys.hexversion >= 0x020600F0:
     from multiprocessing import freeze_support
 
-import locale
 import os
 import threading
 import time
@@ -30,38 +29,15 @@ import signal
 import traceback
 import getopt
 
-import sickbeard
+import phantom
 
-from sickbeard import db
-from sickbeard.tv import TVShow
-from sickbeard import logger
-from sickbeard.version import SICKBEARD_VERSION
+from phantom import logger
+from phantom.version import PHANTOM_VERSION
 
-from sickbeard.webserveInit import initWebServer
-
-from lib.configobj import ConfigObj
+import ConfigObj
 
 signal.signal(signal.SIGINT, sickbeard.sig_handler)
 signal.signal(signal.SIGTERM, sickbeard.sig_handler)
-
-
-def loadShowsFromDB():
-    """
-    Populates the showList with shows from the database
-    """
-
-    myDB = db.DBConnection()
-    sqlResults = myDB.select("SELECT * FROM tv_shows")
-
-    for sqlShow in sqlResults:
-        try:
-            curShow = TVShow(int(sqlShow["tvdb_id"]))
-            sickbeard.showList.append(curShow)
-        except Exception, e:
-            logger.log(u"There was an error creating the show in " + sqlShow["location"] + ": " + str(e).decode('utf-8'), logger.ERROR)
-            logger.log(traceback.format_exc(), logger.DEBUG)
-
-        # TODO: update the existing shows if the showlist has something in it
 
 
 def daemonize():
@@ -69,7 +45,6 @@ def daemonize():
     Fork off as a daemon
     """
 
-    # pylint: disable=E1101
     # Make a non-session-leader child process
     try:
         pid = os.fork()  # @UndefinedVariable - only available in UNIX
@@ -102,10 +77,7 @@ def daemonize():
 
 
 def main():
-    """
-    TV for me
-    """
-
+    
     # do some preliminary stuff
     sickbeard.MY_FULLNAME = os.path.normpath(os.path.abspath(__file__))
     sickbeard.MY_NAME = os.path.basename(sickbeard.MY_FULLNAME)
@@ -115,30 +87,6 @@ def main():
     sickbeard.CREATEPID = False
     sickbeard.DAEMON = False
 
-    sickbeard.SYS_ENCODING = None
-
-    try:
-        locale.setlocale(locale.LC_ALL, "")
-        sickbeard.SYS_ENCODING = locale.getpreferredencoding()
-    except (locale.Error, IOError):
-        pass
-
-    # For OSes that are poorly configured I'll just randomly force UTF-8
-    if not sickbeard.SYS_ENCODING or sickbeard.SYS_ENCODING in ('ANSI_X3.4-1968', 'US-ASCII', 'ASCII'):
-        sickbeard.SYS_ENCODING = 'UTF-8'
-
-    if not hasattr(sys, "setdefaultencoding"):
-        reload(sys)
-
-    try:
-        # pylint: disable=E1101
-        # On non-unicode builds this will raise an AttributeError, if encoding type is not valid it throws a LookupError
-        sys.setdefaultencoding(sickbeard.SYS_ENCODING)
-    except:
-        print 'Sorry, you MUST add the Sick Beard folder to the PYTHONPATH environment variable'
-        print 'or find another way to force Python to use ' + sickbeard.SYS_ENCODING + ' for string encoding.'
-        sys.exit(1)
-
     # Need console logging for SickBeard.py and SickBeard-console.exe
     consoleLogging = (not hasattr(sys, "frozen")) or (sickbeard.MY_NAME.lower().find('-console') > 0)
 
@@ -146,7 +94,7 @@ def main():
     threading.currentThread().name = "MAIN"
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "qfdp::", ['quiet', 'forceupdate', 'port=', 'daemon', 'noresize', 'pidfile=', 'nolaunch', 'config=', 'datadir='])  # @UnusedVariable
+        opts, args = getopt.getopt(sys.argv[1:], "qfdp::", ['quiet', 'forceupdate', 'port=', 'daemon', 'noresize', 'pidfile=', 'nolaunch', 'config=', 'datadir='])
     except getopt.GetoptError:
         print "Available Options: --quiet, --forceupdate, --port, --daemon, --noresize, --pidfile, --nolaunch, --config, --datadir"
         sys.exit()
